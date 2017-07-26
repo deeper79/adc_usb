@@ -49,6 +49,7 @@
 
 #define MMAP_DEV_CMD_GET_BUFSIZE 1	/* defines our IOCTL cmd */
 #define DEV_CMD_SET_START   2	/* defines our IOCTL cmd */
+#define DEV_CMD_SET_STOP    3	/* defines our IOCTL cmd */
 
 static DECLARE_WAIT_QUEUE_HEAD(wq);
 
