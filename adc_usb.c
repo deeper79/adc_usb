@@ -37,10 +37,13 @@ static struct usb_class_driver adc_class = { // структура данных 
 };
 
 
-static long adc_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)// функция управления вводом выводом
+static long adc_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)// функция управления вводом выводом
 {
 	unsigned long tbs = ramdisk_size; // размер виртуального диска
 	void __user *ioargp = (void __user *)arg; //переменная для пердаыи в userspace
+	int retval =0;
+	struct adc_device_struct *dev = NULL;
+	dev = file->private_data;
 
 	switch (cmd) {// команда от user
 	default:
@@ -50,7 +53,20 @@ static long adc_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned lon
 		if (copy_to_user(ioargp, &tbs, sizeof(tbs)))// отправка размера буфера
 			return -EFAULT;
 		return 0;
+	break;
+	case DEV_CMD_SET_START:
+		retval = usb_submit_urb(dev->iso_urb, GFP_KERNEL);
+
+			if (retval) {
+				DBG_ERR("submitting int urb failed (%d)", retval);
+				dev->int_running = 0;
+				return retval;
+			}
+			DBG_INFO("device start");
+		break;
+		
 	}
+	return retval;
 }
 
 
@@ -190,7 +206,7 @@ static int adc_open(struct inode* inode, struct file* file) {
 
 
 
-	unlock_exit: up(&dev->sem);
+	//unlock_exit: up(&dev->sem);
 
 	exit: mutex_unlock(&disconnect_mutex);
 	return retval;
