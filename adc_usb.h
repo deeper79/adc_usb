@@ -47,9 +47,9 @@
 #define DEBUG_LEVEL_CRITICAL	0x01
 #define ISO_PAKETS              0x01
 
-#define MMAP_DEV_CMD_GET_BUFSIZE 0	/* defines our IOCTL cmd */
-#define DEV_CMD_SET_START   1	/* defines our IOCTL cmd */
-#define DEV_CMD_SET_STOP    2	/* defines our IOCTL cmd */
+
+#define DEV_CMD_SET_START   0	/* defines our IOCTL cmd */
+#define DEV_CMD_SET_STOP    1	/* defines our IOCTL cmd */
 
 static DECLARE_WAIT_QUEUE_HEAD(wq);
 

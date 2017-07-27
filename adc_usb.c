@@ -39,21 +39,17 @@ static struct usb_class_driver adc_class = { // структура данных 
 
 static long adc_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)// функция управления вводом выводом
 {
+
+
 	unsigned long tbs = ramdisk_size; // размер виртуального диска
 	void __user *ioargp = (void __user *)arg; //переменная для пердаыи в userspace
 	int retval =0;
 	struct adc_device_struct *dev = NULL;
 	dev = file->private_data;
 
-	DBG_INFO("%d",cmd);
 
 	switch (cmd) {// команда от user
 
-	case MMAP_DEV_CMD_GET_BUFSIZE: // команда о размере буфера
-		if (copy_to_user(ioargp, &tbs, sizeof(tbs)))// отправка размера буфера
-			return -EFAULT;
-		return 0;
-	break;
 	case DEV_CMD_SET_START:
 		retval = usb_submit_urb(dev->iso_urb, GFP_KERNEL);
 
@@ -204,24 +200,11 @@ static int adc_open(struct inode* inode, struct file* file) {
 	dev->iso_urb->iso_frame_desc[0].length = dev->iso_in_endpoint->wMaxPacketSize;
 	dev->iso_urb->iso_frame_desc[0].offset = 0;
 
-
-
-	//retval = usb_submit_urb(dev->iso_urb, GFP_KERNEL);
-
-	/*if (retval) {
-		DBG_ERR("submitting int urb failed (%d)", retval);
-		dev->int_running = 0;
-		goto unlock_exit;
-	}*/
-
-	//dev->int_running = 1;
-	dev->openned     = 1;
+	dev->openned = 1;
 
 	file->private_data = dev;
 
-
 	mb();
-
 	mutex_unlock(&disconnect_mutex);
 	up(&dev->sem);
 
