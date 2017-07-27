@@ -45,9 +45,9 @@ static long adc_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 	struct adc_device_struct *dev = NULL;
 	dev = file->private_data;
 
+	DBG_INFO("%d",cmd);
+
 	switch (cmd) {// команда от user
-	default:
-		return -EINVAL;
 
 	case MMAP_DEV_CMD_GET_BUFSIZE: // команда о размере буфера
 		if (copy_to_user(ioargp, &tbs, sizeof(tbs)))// отправка размера буфера
@@ -62,7 +62,17 @@ static long adc_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 				dev->int_running = 0;
 				return retval;
 			}
+			dev->int_running = 1;
 			DBG_INFO("device start");
+		break;
+	case DEV_CMD_SET_STOP:
+		adc_abort_transfers(dev);
+		DBG_INFO("device stop");
+		dev->int_running = 0;
+
+		break;
+	default:
+			return -EINVAL;
 		break;
 		
 	}
@@ -77,7 +87,7 @@ static unsigned int adc_poll(struct file *file, poll_table * wait){
 		return POLLIN|POLLRDNORM;
 	}
 	return 0;
-}
+};
 
 
 
@@ -153,25 +163,32 @@ static int adc_open(struct inode* inode, struct file* file) {
 	subminor = iminor(inode);
 	mutex_lock(&disconnect_mutex);
 
+
 	interface = usb_find_interface(&adc_driver, subminor);
 
 	if (!interface) {
 		DBG_ERR("can't find device for minor %d", subminor);
 		retval = -ENODEV;
-		goto exit;
+		mutex_unlock(&disconnect_mutex);
+		return retval;
 	}
 
 	dev = usb_get_intfdata(interface);
 
+
 	if (!dev) {
 		retval = -ENODEV;
-		goto exit;
+		mutex_unlock(&disconnect_mutex);
+		return retval;
 	}
+
 
 	if (down_interruptible(&dev->sem)) {
 		retval = -ERESTARTSYS;
-		goto exit;
+		mutex_unlock(&disconnect_mutex);
+		return retval;
 	}
+
 
 	dev->count = 0;
 
@@ -187,6 +204,8 @@ static int adc_open(struct inode* inode, struct file* file) {
 	dev->iso_urb->iso_frame_desc[0].length = dev->iso_in_endpoint->wMaxPacketSize;
 	dev->iso_urb->iso_frame_desc[0].offset = 0;
 
+
+
 	//retval = usb_submit_urb(dev->iso_urb, GFP_KERNEL);
 
 	/*if (retval) {
@@ -195,20 +214,19 @@ static int adc_open(struct inode* inode, struct file* file) {
 		goto unlock_exit;
 	}*/
 
-	dev->int_running = 1;
+	//dev->int_running = 1;
 	dev->openned     = 1;
 
 	file->private_data = dev;
 
+
 	mb();
+
+	mutex_unlock(&disconnect_mutex);
+	up(&dev->sem);
 
 	DBG_INFO("Device opened");
 
-
-
-	//unlock_exit: up(&dev->sem);
-
-	exit: mutex_unlock(&disconnect_mutex);
 	return retval;
 }
 

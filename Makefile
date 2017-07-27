@@ -1,10 +1,14 @@
-obj-m += adc_usb.o
 
-PWD :=$(shell pwd)
-Kernelpath :=../../linux_kernel
+obj-m		:= adc_usb.o 
+KERN_SRC	:= /lib/modules/$(shell uname -r)/build/
+PWD			:= $(shell pwd)
 
-all:
-		make -C /lib/modules/`uname -r`/build M=$(PWD) modules
-		
+modules:
+	make -C $(KERN_SRC) M=$(PWD) modules
+
+install:
+	make -C $(KERN_SRC) M=$(PWD) modules_install
+	depmod -a
+
 clean:
-		make -C $(Kernelpath) M=$(PWD) clean
+	make -C $(KERN_SRC) M=$(PWD) clean
