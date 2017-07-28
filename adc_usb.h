@@ -35,6 +35,8 @@
 #define VENDOOR_ID  0x0000
 #define PRODUTCT_ID 0x0001
 
+#define ADC_USB_MAGIC (0x33)
+
 #ifdef CONFIG_USB_DYNAMIC_MINORS
 #define ML_MINOR_BASE	0
 #else
@@ -48,8 +50,9 @@
 #define ISO_PAKETS              0x01
 
 
-#define DEV_CMD_SET_START   0	/* defines our IOCTL cmd */
-#define DEV_CMD_SET_STOP    1	/* defines our IOCTL cmd */
+#define DEV_CMD_SET_START   _IO(ADC_USB_MAGIC,0)	/* defines our IOCTL cmd */
+#define DEV_CMD_SET_STOP    _IO(ADC_USB_MAGIC,1)	/* defines our IOCTL cmd */
+#define DEV_OFFSET_DATA     _IOR(ADC_USB_MAGIC,2,int)
 
 static DECLARE_WAIT_QUEUE_HEAD(wq);
 
@@ -85,7 +88,7 @@ static atomic_t data_ready;
 
 
 
-static size_t ramdisk_size = (16*PAGE_SIZE);
+static int offset_data = 120;
 
 
 

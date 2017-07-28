@@ -41,14 +41,19 @@ static long adc_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 {
 
 
-	unsigned long tbs = ramdisk_size; // размер виртуального диска
-	void __user *ioargp = (void __user *)arg; //переменная для пердаыи в userspace
+
+	void __user *ioargp = (void __user *)arg; //переменная для передачи в userspace
 	int retval =0;
 	struct adc_device_struct *dev = NULL;
 	dev = file->private_data;
 
 
+
+
 	switch (cmd) {// команда от user
+	case DEV_OFFSET_DATA:
+		retval = copy_to_user(ioargp,&offset_data,sizeof(offset_data));
+	break;
 
 	case DEV_CMD_SET_START:
 		retval = usb_submit_urb(dev->iso_urb, GFP_KERNEL);
@@ -96,15 +101,11 @@ static ssize_t adc_write(struct file *file, const char __user *buf, size_t cnt,
 
 
 static ssize_t adc_read(struct file *file, char __user *buf, size_t cnt,loff_t *off) {
+
 	struct adc_device_struct *dev = NULL;
 
-	int retval;
-	int nbytes =0, maxbytes, bytes_to_do;
 
-/*	if (down_interruptible(&dev->sem)) {
-	 retval = -ERESTARTSYS;
-	 goto exit;
-	}*/
+	int nbytes =0;
 
 	dev = file->private_data;
 
@@ -117,29 +118,14 @@ static ssize_t adc_read(struct file *file, char __user *buf, size_t cnt,loff_t *
 	wait_event_interruptible(wq, (atomic_read(&data_ready)));
 
 	if (down_interruptible(&dev->sem)) {
-			retval = -ERESTARTSYS;
-			goto exit;
-		}
+		up(&dev->sem);
+		return  -ERESTARTSYS;
 
+	}
 
-
-		maxbytes = ramdisk_size - *off;
-		bytes_to_do = maxbytes > cnt ? cnt : maxbytes;
-		if (bytes_to_do == 0)
-			pr_warning("Reached end of the device on a read");
-
-
-
-		nbytes =copy_to_user(buf, user_buffer + *off, bytes_to_do);
-		//*off += nbytes;
-		//up(&dev->sem);
-
-		//dev->count =dev->count - ((int)(cnt/1023));
-		//pr_info("\n Leaving the   READ function, nbytes=%d, pos=%d\n",
-			//		nbytes, dev->count);
+		nbytes =copy_to_user(buf, user_buffer + *off, cnt);
 		memset(dev->iso_buffer,0,1023);
 		atomic_set(&data_ready,0);
-		exit:
 
 		up(&dev->sem);
 
