@@ -48,6 +48,10 @@
 #define DEBUG_LEVEL_ERROR		0x03
 #define DEBUG_LEVEL_CRITICAL	0x01
 #define ISO_PAKETS              0x01
+enum {
+	razvertka,
+	dalnost_tochno
+};
 
 
 #define DEV_CMD_SET_START   _IO(ADC_USB_MAGIC,0)	/* defines our IOCTL cmd */
@@ -88,41 +92,37 @@ static atomic_t data_ready;
 
 
 
-static int offset_data = 120;
+static int offset_data; // смещение данных в буффере
 
 
 
 
 
 struct adc_device_struct{
-	struct usb_device              *udev;
-	struct usb_intreface           *interface;
+	struct usb_device              *udev; // указатель на структуру устройства
+	struct usb_intreface           *interface; // указатель на инетрфейс usb
 	unsigned char	minor;
 
-    struct usb_endpoint_descriptor *int_in_endpoint;
-    struct urb                     *int_urb;
-    char                           *int_buffer;
+    struct usb_endpoint_descriptor *iso_tocho_endpoint; // указатель на дескриптор точки точной дальности
+    struct urb                     *iso_tocho_urb;      // указатель на urb точки точной дальности
+    char                           *iso_tocho_buffer;   // указатель на буффер точки точной дальности iso передачи
 
-    struct usb_endpoint_descriptor *iso_in_endpoint;
-    struct urb                     *iso_urb;
-    char                           *iso_buffer;
-    size_t                          iso_buf_len;
+    struct usb_endpoint_descriptor *iso_razvertka_endpoint; // указатель на дескриптор развертки
+    struct urb                     *iso_razvertka_urb;      // указатель на urb точки развертки
+    char                           *iso_razvertka_buffer;   // указатель на буффер развертки iso передачи
 
-    __u8                            int_running;
-    __u8                            openned;
-    __u8                            count;
-    struct semaphore                sem; /* Locks this structure */
+    size_t                          iso_razvertka_buf_len; // размер буффера развертки
+    size_t                          iso_tocho_buf_len;     // размер буффера точной дальности
 
+    __u8                            int_running;           // устройство работает
+    __u8                            openned;               // устройство открыто
+    __u8                            count;                 // счетчик принятых пакетов (пока не нужен!)
+    struct semaphore                sem; /* Locks this structure */ // структура для mutex
 
-    int vmas; /* active mappings */
-    int order;                /* the current allocation order */
-    int qset; /* the current array size */
-
-    struct cdev cdev;
 
 };
 
-static char* user_buffer;
+static char* user_buffer; // буффер для передачи userspace
 
 
 

@@ -333,22 +333,27 @@ static int adc_probe(struct usb_interface *interface,
 	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
 
 		endpoint = &iface_desc->endpoint[i].desc;
-
-		if ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
-				== USB_ENDPOINT_XFER_ISOC) {
-			dev->iso_in_endpoint = endpoint;
+		switch(i){
+		case(razvertka):
+				dev->iso_razvertka_endpoint = endpoint;
+		break;
+		case(dalnost_tochno):
+				dev->iso_tocho_endpoint= endpoint;
+		break;
 		}
 
-		if ((endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK)
-				== USB_ENDPOINT_XFER_INT) {
-			dev->int_in_endpoint = endpoint;
-		}
 
 	}
-	if (!dev->iso_in_endpoint) {
-		DBG_ERR("could not find iso in endpoint");
+	if (!dev->iso_razvertka_endpoint) {
+		DBG_ERR("конечная точка с разверткой не найдена");
 		goto error;
 	}
+	if (!dev->iso_tocho_endpoint) {
+			DBG_ERR("конечная точка с точной дальностью не найдена);
+			goto error;
+		}
+
+
 
 	sema_init(&dev->sem, 1);
 
