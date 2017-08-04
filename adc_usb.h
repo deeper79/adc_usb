@@ -48,6 +48,8 @@
 #define DEBUG_LEVEL_ERROR		0x03
 #define DEBUG_LEVEL_CRITICAL	0x01
 #define ISO_PAKETS              0x01
+#define offset_tochno           512
+#define offset_razvertka        0
 enum {
 	razvertka,
 	dalnost_tochno
@@ -103,9 +105,9 @@ struct adc_device_struct{
 	struct usb_intreface           *interface; // указатель на инетрфейс usb
 	unsigned char	minor;
 
-    struct usb_endpoint_descriptor *iso_tocho_endpoint; // указатель на дескриптор точки точной дальности
-    struct urb                     *iso_tocho_urb;      // указатель на urb точки точной дальности
-    char                           *iso_tocho_buffer;   // указатель на буффер точки точной дальности iso передачи
+    struct usb_endpoint_descriptor *iso_tochno_endpoint; // указатель на дескриптор точки точной дальности
+    struct urb                     *iso_tochno_urb;      // указатель на urb точки точной дальности
+    char                           *iso_tochno_buffer;   // указатель на буффер точки точной дальности iso передачи
 
     struct usb_endpoint_descriptor *iso_razvertka_endpoint; // указатель на дескриптор развертки
     struct urb                     *iso_razvertka_urb;      // указатель на urb точки развертки
@@ -123,12 +125,19 @@ struct adc_device_struct{
 };
 
 static char* user_buffer; // буффер для передачи userspace
+/*
+ Расположение данных в буффре:
+ 0-511 данный развертки
+ 512-711 данные точной дальности
+ 712-766 данные о состояние устройства
+ */
 
 
 
 
 static int  adc_probe(struct usb_interface *inter, const struct usb_device_id *id);
-static void adc_iso_callbak(struct urb *urb);
+static void adc_iso_razvertka_callbak(struct urb *urb);
+static void adc_iso_tochno_callbak(struct urb *urb);
 
 //static void adc_int_callback(struct urb *urb);
 

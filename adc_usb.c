@@ -56,7 +56,15 @@ static long adc_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 	break;
 
 	case DEV_CMD_SET_START:
-		retval = usb_submit_urb(dev->iso_urb, GFP_KERNEL);
+		retval = usb_submit_urb(dev->iso_razvertka_urb, GFP_KERNEL);
+
+		if (retval) {
+						DBG_ERR("submitting int urb failed (%d)", retval);
+						dev->int_running = 0;
+						return retval;
+		}
+
+		retval = usb_submit_urb(dev->iso_tochno_urb, GFP_KERNEL);
 
 			if (retval) {
 				DBG_ERR("submitting int urb failed (%d)", retval);
@@ -124,7 +132,7 @@ static ssize_t adc_read(struct file *file, char __user *buf, size_t cnt,loff_t *
 	}
 
 		nbytes =copy_to_user(buf, user_buffer + *off, cnt);
-		memset(dev->iso_buffer,0,1023);
+
 		atomic_set(&data_ready,0);
 
 		up(&dev->sem);
@@ -174,17 +182,29 @@ static int adc_open(struct inode* inode, struct file* file) {
 
 	dev->count = 0;
 
-	dev->iso_urb->dev                      = dev->udev;
-	dev->iso_urb->context                  = dev;
-	dev->iso_urb->pipe                     = usb_rcvisocpipe(dev->udev,dev->iso_in_endpoint->bEndpointAddress);
-	dev->iso_urb->interval                 = dev->iso_in_endpoint->bInterval;
-	dev->iso_urb->complete                 = adc_iso_callbak;
-	dev->iso_urb->transfer_flags           = URB_ISO_ASAP;
-	dev->iso_urb->transfer_buffer          = dev->iso_buffer;
-	dev->iso_urb->number_of_packets        = ISO_PAKETS;
-	dev->iso_urb->transfer_buffer_length   = dev->iso_in_endpoint->wMaxPacketSize;
-	dev->iso_urb->iso_frame_desc[0].length = dev->iso_in_endpoint->wMaxPacketSize;
-	dev->iso_urb->iso_frame_desc[0].offset = 0;
+	dev->iso_razvertka_urb->dev                      = dev->udev;
+	dev->iso_razvertka_urb->context                  = dev;
+	dev->iso_razvertka_urb->pipe                     = usb_rcvisocpipe(dev->udev,dev->iso_razvertka_endpoint->bEndpointAddress);
+	dev->iso_razvertka_urb->interval                 = dev->iso_razvertka_endpoint->bInterval;
+	dev->iso_razvertka_urb->complete                 = adc_iso_razvertka_callbak;
+	dev->iso_razvertka_urb->transfer_flags           = URB_ISO_ASAP;
+	dev->iso_razvertka_urb->transfer_buffer          = dev->iso_razvertka_buffer;
+	dev->iso_razvertka_urb->number_of_packets        = ISO_PAKETS;
+	dev->iso_razvertka_urb->transfer_buffer_length   = dev->iso_razvertka_endpoint->wMaxPacketSize;
+	dev->iso_razvertka_urb->iso_frame_desc[0].length = dev->iso_razvertka_endpoint->wMaxPacketSize;
+	dev->iso_razvertka_urb->iso_frame_desc[0].offset = 0;
+
+	dev->iso_tochno_urb->dev                      = dev->udev;
+	dev->iso_tochno_urb->context                  = dev;
+	dev->iso_tochno_urb->pipe                     = usb_rcvisocpipe(dev->udev,dev->iso_tochno_endpoint->bEndpointAddress);
+	dev->iso_tochno_urb->interval                 = dev->iso_tochno_endpoint->bInterval;
+	dev->iso_tochno_urb->complete                 = adc_iso_tochno_callbak;
+	dev->iso_tochno_urb->transfer_flags           = URB_ISO_ASAP;
+	dev->iso_tochno_urb->transfer_buffer          = dev->iso_tochno_buffer;
+	dev->iso_tochno_urb->number_of_packets        = ISO_PAKETS;
+	dev->iso_tochno_urb->transfer_buffer_length   = dev->iso_tochno_endpoint->wMaxPacketSize;
+	dev->iso_tochno_urb->iso_frame_desc[0].length = dev->iso_tochno_endpoint->wMaxPacketSize;
+	dev->iso_tochno_urb->iso_frame_desc[0].offset = 0;
 
 	dev->openned = 1;
 
@@ -253,15 +273,12 @@ static int adc_release(struct inode* node, struct file* file) {
 
  }*/
 
-static void adc_iso_callbak(struct urb *urb) {
+static void adc_iso_razvertka_callbak(struct urb *urb) {
 	int retval;
 
 	static int zero_transfer = 0;
 
 	struct adc_device_struct *dev = urb->context;
-
-
-    memcpy(user_buffer,dev->iso_buffer,1023);
 
 
 	if (urb->status ==0) {
@@ -279,32 +296,82 @@ static void adc_iso_callbak(struct urb *urb) {
 		DBG_ERR("Zero transfer (%d)", zero_transfer);
 	}
 
+	 memcpy(user_buffer+offset_razvertka,dev->iso_razvertka_buffer,dev->iso_razvertka_buf_len);
+
 
 	if (dev->int_running && dev->udev) {
 
-		retval = usb_submit_urb(dev->iso_urb, GFP_ATOMIC);
+		retval = usb_submit_urb(dev->iso_razvertka_urb, GFP_ATOMIC);
 
 		if (retval) {
-			DBG_ERR("submitting correction control URB failed (%d)", retval);
+			DBG_ERR("submitting correction control URB failed (%d), развертка", retval);
 			dev->int_running = 0;
 
 		}
 
 	}
 
+	offset_data = offset_razvertka;
 
 	wake_up_interruptible(&wq);
 	atomic_set(&data_ready, 1);
 
 
-	memset(dev->iso_buffer,0,1023);
+	memset(dev->iso_razvertka_buffer,0,dev->iso_razvertka_buf_len);
+}
+
+static void adc_iso_tochno_callbak(struct urb *urb) {
+	int retval;
+
+	static int zero_transfer = 0;
+	struct adc_device_struct *dev = urb->context;
+
+
+
+	if (urb->status ==0) {
+		if (urb->status == -ENOENT || urb->status == -ECONNRESET
+				|| urb->status == -ESHUTDOWN) {
+			DBG_ERR("non-zero urb status return");
+			return;
+		}
+	} else {
+		DBG_ERR("non-zero urb status (%d)", urb->status);
+	}
+
+	if (urb->actual_length == 0) {
+		zero_transfer++;
+		DBG_ERR("Zero transfer (%d)", zero_transfer);
+	}
+	memcpy(user_buffer+offset_tochno,dev->iso_tochno_buffer,dev->iso_tocho_buf_len);
+
+
+	if (dev->int_running && dev->udev) {
+
+		retval = usb_submit_urb(dev->iso_tochno_urb, GFP_ATOMIC);
+
+		if (retval) {
+			DBG_ERR("submitting correction control URB failed (%d), endpoint  точная дальность", retval);
+			dev->int_running = 0;
+
+		}
+
+	}
+
+	offset_data = offset_tochno;
+
+	wake_up_interruptible(&wq);
+	atomic_set(&data_ready, 1);
+
+
+	memset(dev->iso_tochno_buffer,0,dev->iso_tocho_buf_len);
 }
 
 static int adc_probe(struct usb_interface *interface,
 		const struct usb_device_id *id) {
 
 	__u8 i;
-	int iso_end_size;
+	int iso_end_size_razvertka;
+	int iso_end_size_tochno;
 	struct usb_device *udev = interface_to_usbdev(interface);
 	struct adc_device_struct *dev = NULL;
 	struct usb_host_interface *iface_desc;
@@ -338,7 +405,7 @@ static int adc_probe(struct usb_interface *interface,
 				dev->iso_razvertka_endpoint = endpoint;
 		break;
 		case(dalnost_tochno):
-				dev->iso_tocho_endpoint= endpoint;
+				dev->iso_tochno_endpoint= endpoint;
 		break;
 		}
 
@@ -348,35 +415,54 @@ static int adc_probe(struct usb_interface *interface,
 		DBG_ERR("конечная точка с разверткой не найдена");
 		goto error;
 	}
-	if (!dev->iso_tocho_endpoint) {
-			DBG_ERR("конечная точка с точной дальностью не найдена);
+	if (!dev->iso_tochno_endpoint) {
+			DBG_ERR("конечная точка с точной дальностью не найдена");
 			goto error;
-		}
+	}
 
 
 
 	sema_init(&dev->sem, 1);
 
-	iso_end_size = le16_to_cpu(dev->iso_in_endpoint->wMaxPacketSize);
+	iso_end_size_razvertka = le16_to_cpu(dev->iso_razvertka_endpoint->wMaxPacketSize);
+	iso_end_size_tochno    = le16_to_cpu(dev->iso_tochno_endpoint->wMaxPacketSize);
 
-	dev->iso_buffer = kmalloc(1023, GFP_KERNEL);
-	user_buffer = kmalloc(1023, GFP_KERNEL);
+	dev->iso_razvertka_buffer  = kmalloc(iso_end_size_razvertka, GFP_KERNEL);// выделение памяти под буффер usb развертки
+	dev->iso_tochno_buffer     = kmalloc(iso_end_size_tochno, GFP_KERNEL);   // выделение памяти под буффер usb точной дальности
+	user_buffer                = kmalloc(2048, GFP_KERNEL);                  // выделение памяти под буффер для передачи в userspace
 
-	if (!dev->iso_buffer) {
-		DBG_ERR("could not allocate iso_buffer");
+	if (!dev->iso_razvertka_buffer) {
+		DBG_ERR("could not allocate iso_razvertka_buffer");
 		retval = -ENOMEM;
 		goto error;
 	}
+
+	if (!dev->iso_tochno_endpoint) {
+			DBG_ERR("could not allocate iso_tochno_buffer");
+			retval = -ENOMEM;
+			goto error;
+	}
+
 
 	dev->count = 0;
 
-	dev->iso_urb = usb_alloc_urb(ISO_PAKETS, GFP_ATOMIC);
+	dev->iso_razvertka_urb = usb_alloc_urb(ISO_PAKETS, GFP_ATOMIC);
+	dev->iso_tochno_urb     = usb_alloc_urb(ISO_PAKETS, GFP_ATOMIC);
 
-	if (!dev->iso_urb) {
-		DBG_ERR("could not allocate int_in_urb");
+	if (!dev->iso_razvertka_urb) {
+		DBG_ERR("could not allocate iso_razvertka_urb");
 		retval = -ENOMEM;
 		goto error;
 	}
+
+	if (!dev->iso_tochno_urb) {
+			DBG_ERR("could not allocate iso_tocho_urb");
+			retval = -ENOMEM;
+			goto error;
+	}
+	    dev->minor = interface->minor;
+		dev->iso_razvertka_buf_len = iso_end_size_razvertka;
+		dev->iso_tocho_buf_len     = iso_end_size_tochno;
 
 
 
@@ -390,13 +476,10 @@ static int adc_probe(struct usb_interface *interface,
 		goto error;
 	}
 
-	dev->minor = interface->minor;
-	dev->iso_buf_len = 1023;
+
 
 	DBG_INFO("USB ADC now attached to /dev/adc_rls1.0%d",
 			interface->minor - ML_MINOR_BASE);
-
-
 
 	return retval;
 
@@ -407,10 +490,15 @@ static int adc_probe(struct usb_interface *interface,
 static inline void adc_delete(struct adc_device_struct *dev) {
 
 	adc_abort_transfers(dev);
-	if (dev->iso_urb) {
-		usb_free_urb(dev->iso_urb);
+	if (dev->iso_razvertka_urb) {
+		usb_free_urb(dev->iso_razvertka_urb);
 	}
-	kfree(dev->iso_buffer);
+
+	if (dev->iso_tochno_urb) {
+			usb_free_urb(dev->iso_tochno_urb);
+		}
+	kfree(dev->iso_razvertka_buffer);
+	kfree(dev->iso_tochno_buffer);
 	kfree(dev);
 
 }
@@ -434,9 +522,14 @@ static void adc_abort_transfers(struct adc_device_struct *dev) {
 	if (dev->int_running) {
 		dev->int_running = 0;
 		mb();
-		if (dev->iso_urb) {
-			usb_kill_urb(dev->iso_urb);
+		if (dev->iso_razvertka_urb) {
+			usb_kill_urb(dev->iso_razvertka_urb);
 		}
+
+		if (dev->iso_tochno_urb) {
+			usb_kill_urb(dev->iso_tochno_urb);
+		}
+
 
 	}
 
